@@ -42,6 +42,25 @@ ament_target_dependencies(
   "trajectory_msgs"
 )
 
+add_executable(task_node3 src/task_node3.cpp)
+ament_target_dependencies(
+  task_node3
+  "rclcpp"
+  "uclv_seed_robotics_ros_interfaces" # std_msgs sta quì
+  "std_srvs"
+  "uclv_dynamixel_utils"
+  "repo_controller"
+)
+
+add_executable(task_node4 src/task_node4.cpp)
+ament_target_dependencies(
+  task_node4
+  "rclcpp"
+  "uclv_seed_robotics_ros_interfaces" # std_msgs sta quì
+  "std_srvs"
+  "uclv_dynamixel_utils"
+  "repo_controller"
+)
 
 
 
@@ -49,6 +68,8 @@ ament_target_dependencies(
 install(TARGETS 
   task_node
   task_node2
+  task_node3
+  task_node4
   DESTINATION 
     lib/${PROJECT_NAME}
 )
