@@ -1,4 +1,12 @@
-// QUESTO LO USO PER LO SLIPPING AVOIDANCE CON IL BICCHIERE
+// QUESTO TASK NODE MUOVE L'UR NELLO SPAZIO GIUNTI DA UNA POSIZIONE
+// DI HOME AD UNA POSIZIONE DI PICK
+// POI VENGONO CALIBRATI I SENSORI DELLA MANO, VENGONO INVIATE LE NORME DESIDERATE
+// E POI SI CHIUDE LA MANO
+// IL ROBOT VA  IN UNA POSIZIONE DI READY_TO_FALL
+// HAPTIC CUE
+// IL ROBOT TORNA IN HOME
+
+
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/set_bool.hpp"
@@ -16,7 +24,7 @@
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-class TaskNode : public rclcpp::Node
+class TaskNode5 : public rclcpp::Node
 {
 public:
     using Traj = control_msgs::action::FollowJointTrajectory;
@@ -26,11 +34,12 @@ public:
     bool check_norm_forces_;
 
     std::vector<int64_t> sensor_ids = {0, 1, 2, 3, 4};
-    std::vector<double> sensor_norms = {0.1, 0.1, 0.1, 0.1, 0.1};
+    std::vector<double> sensor_norms = {0.3, 0.3, 0.3, 0.3, 0.3};
 
     std::vector<int64_t> hand_ids = {31, 32, 33, 34, 35, 36, 37, 38};
     std::vector<double> init_position = {100, 2000, 2000, 100, 100, 100, 100, 100};
-    std::vector<double> grasp_position = {100, 2000, 2000, 3900, 100, 100, 100, 100};
+    std::vector<double> grasp_position = {100, 2000, 2000, 3000, 100, 100, 100, 100};
+
 
     rclcpp::Publisher<uclv_seed_robotics_ros_interfaces::msg::MotorPositions>::SharedPtr motor_positions_pub_;
 
@@ -41,6 +50,7 @@ public:
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr calibrate_client_;
 
     rclcpp::Subscription<uclv_seed_robotics_ros_interfaces::msg::Float64WithIdsStamped>::SharedPtr norm_force_subscriber_;
+
 
     uclv_seed_robotics_ros_interfaces::msg::Float64WithIdsStamped msg;
 
@@ -72,26 +82,37 @@ public:
         -2.653};
 
 
-    std::vector<double> pre_ready = {
-        -0.695,
-        1.201,
-        -2.184,
-        -2.436,
-        6.013,
-        -2.560};
-        
+
+// name:
+// - shoulder_lift_joint
+// - elbow_joint
+// - wrist_1_joint
+// - wrist_2_joint
+// - wrist_3_joint
+// - shoulder_pan_joint
+// position:
+// - -0.8129881781390687
+// - -2.174978256225586
+// - -2.272006174127096
+// - 6.014680862426758
+// - -2.653013054524557
+// - 1.2033562660217285
+
+
+
+    std::vector<double> ready_to_fall = {
+        -2.114,
+        0.705,
+        -2.482,
+        -2.427,
+        5.911,
+        -2.513};
 
 
 
 
 
-    std::vector<double> ready_to_slip = {
-        -2.311,
-        0.766,
-        -2.481,
-        -1.776,
-        5.433,
-        -1.507};
+
 
 
 
@@ -103,7 +124,7 @@ public:
         5.268,
         -2.175};
 
-    TaskNode() : Node("task_node")
+    TaskNode5() : Node("task_node5")
     {
 
         motor_positions_pub_ = this->create_publisher<uclv_seed_robotics_ros_interfaces::msg::MotorPositions>("/cmd/positions", 10);
@@ -119,9 +140,11 @@ public:
             this,
             "/scaled_joint_trajectory_controller/follow_joint_trajectory");
 
+        norm_force_subscriber_ = this->create_subscription<uclv_seed_robotics_ros_interfaces::msg::Float64WithIdsStamped>(
+            "/state/norm_forces", 10, std::bind(&TaskNode5::check_and_handle_norm_forces, this, _1));
         // this->timer_ = this->create_wall_timer(
         // std::chrono::milliseconds(500),
-        // std::bind(&TaskNode::send_goal, this));
+        // std::bind(&TaskNode5::send_goal, this));
     }
 
     void run()
@@ -140,25 +163,19 @@ public:
         goal_traj(pick_position, 10.0);
 
         std::this_thread::sleep_for(std::chrono::seconds{10});
+
         hand_run();
 
-        std::cout << "Go Pre-Ready..." << std::endl;
+
+        std::cout << "Go Ready-To-Fall..." << std::endl;
         std::cin.get();
-        goal_traj(pre_ready, 3.0);
+        goal_traj(ready_to_fall, 5.0);
 
-        std::cout<< "Go Ready-To-Slip..." << std::endl;
+
+        std::cout << "Press Enter to start checking norm forces..." << std::endl;
         std::cin.get();
-        goal_traj(ready_to_slip, 5.0);
-
-        std::this_thread::sleep_for(std::chrono::seconds{5});
-        std::cout << "Activate slipping avoidance.." << std::endl;
-        std::cin.get();
-        call_slipping_service(hand_ids, sensor_norms);
-
-        // std::cout << "Press Enter to start checking norm forces..." << std::endl;
-        // std::cin.get();
-        // check_norm_forces_ = true;
-
+        check_norm_forces_ = true;
+        
         // std::this_thread::sleep_for(std::chrono::seconds{10});
 
         // std::cout << "Go Home..." << std::endl;
@@ -167,6 +184,7 @@ public:
     }
 
 private:
+
     void set_positions(const std::vector<int64_t> ids, const std::vector<double> positions)
     {
         auto msg = uclv_seed_robotics_ros_interfaces::msg::MotorPositions();
@@ -179,7 +197,7 @@ private:
         {
             msg.positions.push_back(positions[i]);
         }
-
+        
         motor_positions_pub_->publish(msg);
         RCLCPP_INFO(this->get_logger(), "Init position published.");
     }
@@ -237,6 +255,8 @@ private:
         auto result = calibrate_client_->async_send_request(request);
     }
 
+
+
     void goal_traj(const std::vector<double> position, double time)
     {
         auto goal_msg = Traj::Goal();
@@ -266,12 +286,37 @@ private:
             RCLCPP_INFO(this->get_logger(), "Goal accepted by server, waiting for result");
         }
     }
+
+    void check_and_handle_norm_forces(const uclv_seed_robotics_ros_interfaces::msg::Float64WithIdsStamped::SharedPtr msg)
+    {
+        if (!check_norm_forces_)
+        {   
+            RCLCPP_WARN(this->get_logger(), "RETURN RETURN RETURN RETURN");
+            return;
+        }
+
+        double total_force_norm = 0.0;
+        for (size_t i = 0; i < msg->data.size(); i++)
+        {
+            total_force_norm += msg->data[i];
+            std::cout << "Norm force for sensor " << msg->ids[i] << ": " << msg->data[i] << std::endl;
+        }
+
+        double average_force_norm = total_force_norm / msg->data.size();
+        std::cout << "Average norm force: " << average_force_norm << std::endl;
+
+        if (average_force_norm > norm_threshold_)
+        {
+            std::cout << WARN_COLOR << "Average threshold exceeded. Activating open service." << CRESET << std::endl;
+            call_open_service();
+        }
+    }
 };
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<TaskNode>();
+    auto node = std::make_shared<TaskNode5>();
     node->run();
     rclcpp::spin(node);
     rclcpp::shutdown();

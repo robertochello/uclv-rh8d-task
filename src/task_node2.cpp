@@ -150,6 +150,7 @@ public:
         std::cout << "Press for open..." << std::endl;
         std::cin.get();
         call_open_service();
+        call_open_service();
 
         std::cout << "Go Home..." << std::endl;
         std::cin.get();
